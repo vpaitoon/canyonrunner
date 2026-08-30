@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -210,15 +211,16 @@ resize();
 
 /* ---------------- tuning ---------------- */
 const T = {
-  visibleMeters: 145,     // how much canyon fits on screen
+  visibleMeters: 162,     // how much canyon fits on screen (more lookahead)
   anchorY: 0.30,          // where the climber sits vertically
-  fastSpeed: 60,          // m/s, brake off
+  fastSpeed: 55,          // m/s, brake off
   slowSpeed: 17,          // m/s, brake on
   accel: 105,             // m/s^2 toward target speed
-  swingK: 27,             // pendulum spring constant
-  swingDamp: 0.55,        // damping per second
-  swingKick: 3.6,         // impulse from one swipe
-  playerHalfW: 0.115,     // in normalized canyon units (-1 .. 1)
+  swingStep: 0.55,        // how far one swipe moves you across the canyon
+  swingMax: 0.95,         // furthest you can plant yourself from centre
+  swingOmega: 6.0,        // how quickly you travel to the new spot
+  swingZeta: 0.72,        // <1 leaves a little overshoot, so it still arcs
+  playerHalfW: 0.10,      // in normalized canyon units (-1 .. 1)
   playerHalfD: 6,         // meters
   heatUp: 0.255,          // per second at full speed
   heatDown: 0.50,         // per second while braking
@@ -248,7 +250,7 @@ const LEVEL = {
       rock(360, -1, 0.95),
 
       // --- first brake gate: you cannot pass this without holding ---
-      chock(470, 0.72, 0.42, 1.05, 0),
+      chock(470, 0.88, 0.28, 0.80, 0),
 
       rock(575, +1, 0.9),
       rock(650, -1, 0.9),
@@ -259,7 +261,7 @@ const LEVEL = {
       // --- ledge: costs time, teaches that stopping is bad ---
       ledge(975, -0.34, 0.34),
 
-      chock(1080, 0.62, 0.5, 1.35, 1.2),
+      chock(1080, 0.82, 0.34, 0.95, 1.2),
 
       rock(1180, -1, 1.05),
       rock(1240, +1, 1.05),
@@ -267,7 +269,7 @@ const LEVEL = {
       rock(1350, +1, 1.1),
 
       fall(1420, 70),
-      chock(1530, 0.56, 0.55, 1.6, 0.4),
+      chock(1530, 0.78, 0.38, 1.10, 0.4),
 
       rock(1625, +1, 1.1),
       rock(1678, -1, 1.1),
@@ -275,7 +277,7 @@ const LEVEL = {
       rock(1800, -1, 1.15),
       rock(1852, +1, 1.15),
       rock(1904, -1, 1.0),
-      chock(1975, 0.58, 0.5, 1.5, 2.1)
+      chock(1975, 0.78, 0.36, 1.05, 2.1)
     ];
   }
 };
@@ -287,7 +289,7 @@ const G = {
   clock:0,           // absolute time, drives chockstone gaps
   depth:0,
   speed:0,
-  x:0, vx:0,
+  x:0, vx:0, tx:0,
   heat:0,
   grip:T.grip,
   hits:0,
@@ -310,7 +312,7 @@ const G = {
 
 function reset(){
   G.mode='play'; G.t=0; G.depth=0; G.speed=T.slowSpeed;
-  G.x=0; G.vx=0; G.heat=0; G.grip=T.grip; G.hits=0;
+  G.x=0; G.vx=0; G.tx=0; G.heat=0; G.grip=T.grip; G.hits=0;
   G.nearMisses=0; G.combo=1; G.score=0;
   G.stallT=0; G.invuln=0; G.shake=0; G.slowmo=0;
   G.wetness=0; G.particles.length=0; G.ended=null;
@@ -339,7 +341,7 @@ const SWIPE_PX = 26;
 
 function kick(dir){
   if(G.mode !== 'play') return;
-  G.vx += dir * T.swingKick;
+  G.tx = Math.max(-T.swingMax, Math.min(T.swingMax, G.tx + dir * T.swingStep));
   puff(G.x, 0, dir);
   // a player who already found the swipe never needs to be told about it
   if(G.hintPending && G.hintPending.kind === 'swipe') G.hintPending = null;
@@ -443,12 +445,23 @@ function update(dtRaw){
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.wetness = Math.max(0, G.wetness - dt * 1.6);
 
-  /* --- pendulum --- */
-  G.vx += (-T.swingK * G.x) * dt;
-  G.vx *= Math.pow(T.swingDamp, dt);
-  G.x += G.vx * dt;
-  if(G.x < -1){ G.x = -1; G.vx = Math.abs(G.vx) * 0.42; }
-  if(G.x > 1){ G.x = 1; G.vx = -Math.abs(G.vx) * 0.42; }
+  /* --- swing --- */
+  // You kick off the wall and your feet catch at the new spot: the swing
+  // settles wherever you put it. Nothing drags you back to the middle,
+  // which is what makes an obstacle dodgeable rather than a timing lottery.
+  {
+    const w2 = T.swingOmega * T.swingOmega;
+    const c = 2 * T.swingZeta * T.swingOmega;
+    let rem = dt;
+    while(rem > 0){                       // substep so the spring stays stable
+      const h = Math.min(1/240, rem);
+      G.vx += (w2 * (G.tx - G.x) - c * G.vx) * h;
+      G.x += G.vx * h;
+      rem -= h;
+    }
+  }
+  if(G.x < -1){ G.x = -1; G.vx = 0; }
+  if(G.x > 1){ G.x = 1; G.vx = 0; }
 
   /* --- descent --- */
   if(G.stallT > 0){
