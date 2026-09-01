@@ -38,8 +38,8 @@
   .strata{display:flex;flex-direction:column;gap:12px;}
 
   .band{
-    position:relative;display:block;overflow:hidden;
-    min-height:132px;padding:20px 22px;border-radius:16px;
+    position:relative;display:flex;align-items:center;overflow:hidden;
+    min-height:104px;padding:22px 24px;border-radius:16px;
     text-decoration:none;color:inherit;isolation:isolate;
     transition:transform 140ms ease, box-shadow 140ms ease;
   }
@@ -65,20 +65,13 @@
     color:rgba(255,255,255,0.13);pointer-events:none;
   }
 
-  .who{
-    margin:0 0 8px;font-size:12px;font-weight:600;color:rgba(255,236,206,0.72);
-  }
   .name{
-    margin:0;font-size:25px;font-weight:800;line-height:1.12;letter-spacing:-0.018em;
-    max-width:15ch;position:relative;z-index:1;
-  }
-  .what{
-    margin:10px 0 0;font-size:13.5px;line-height:1.45;color:rgba(244,236,224,0.72);
-    max-width:30ch;position:relative;z-index:1;
+    margin:0;font-size:27px;font-weight:800;line-height:1.14;letter-spacing:-0.02em;
+    max-width:16ch;position:relative;z-index:1;
   }
 
   .band.soon{pointer-events:none;}
-  .band.soon .name,.band.soon .who,.band.soon .what{opacity:0.5;}
+  .band.soon .name{opacity:0.5;}
   .band.soon::after{background:linear-gradient(90deg,rgba(10,6,12,0.86),rgba(10,6,12,0.62));}
 
   .colophon{
@@ -112,22 +105,18 @@
    2. Add one entry to the list below.
    3. Done. Levels never touch each other's code.
 
-   file: null  ->  shows as a locked band, nothing to click yet.
+   file: null  ->  shows as a dimmed band, nothing to click yet.
 ------------------------------------------------------------------- */
 var LEVELS = [
   {
     n: 1,
     name: "Bruce's Magical Journey",
-    friend: 'Bruce',
-    what: 'Rappel 2050m to the floor. Hold the brake, swipe to swing, mind the rope heat.',
     file: 'level1.html',
     colors: ['#c25a35', '#2a0f22']
   },
   {
     n: 2,
     name: 'Karlyn Takes the High Road',
-    friend: 'Karlyn',
-    what: 'Climb 461m of sandstone. Charge a leap, catch the lip, rest your grip.',
     file: 'level2.html',
     colors: ['#3a2340', '#e8a33d']
   }
@@ -142,26 +131,16 @@ LEVELS.forEach(function(L){
   el.style.setProperty('--c1', L.colors[0]);
   el.style.setProperty('--c2', L.colors[1]);
 
-  var who = document.createElement('p');
-  who.className = 'who';
-  who.textContent = L.file ? 'Built for ' + L.friend : 'Still being carved';
-
   var name = document.createElement('p');
   name.className = 'name';
   name.textContent = L.name;
-
-  var what = document.createElement('p');
-  what.className = 'what';
-  what.textContent = L.what;
 
   var depth = document.createElement('span');
   depth.className = 'depth';
   depth.setAttribute('aria-hidden', 'true');
   depth.textContent = L.n;
 
-  el.appendChild(who);
   el.appendChild(name);
-  el.appendChild(what);
   el.appendChild(depth);
   strata.appendChild(el);
 });
