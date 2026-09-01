@@ -49,6 +49,7 @@ var BODY     = 34;     // feet -> hands
 var CLIMB    = 4400;   // px of wall
 var PX_PER_M = 10;
 var LEVEL_SEED = 20502;
+var REFORM   = 4.5;    // seconds before a collapsed ledge rebuilds
 
 /* ---------------- level ---------------- */
 var ledges = [];
@@ -64,7 +65,7 @@ function reachDX(h){
 function buildLevel(){
   var rnd = mulberry32(LEVEL_SEED);
   ledges = [];
-  ledges.push({x:VW/2-80, y:0, w:160, type:'rest', t:0, gone:false});
+  ledges.push({x:VW/2-80, y:0, w:160, type:'rest', t:0, gone:false, re:0});
   var y = 0, c = VW/2, i = 0;
   while(y > -CLIMB){
     i++;
@@ -83,10 +84,10 @@ function buildLevel(){
     var reach = Math.min(115 + 85*p, reachDX(gap)*0.78 + w/2);
     var shift = (rnd()*2-1) * reach;
     c = clamp(c + shift, 58 + w/2, VW - 58 - w/2);
-    ledges.push({x:c-w/2, y:y, w:w, type:type, t:0, gone:false});
+    ledges.push({x:c-w/2, y:y, w:w, type:type, t:0, gone:false, re:0});
   }
   topY = y - 150;
-  ledges.push({x:50, y:topY, w:VW-100, type:'top', t:0, gone:false});
+  ledges.push({x:50, y:topY, w:VW-100, type:'top', t:0, gone:false, re:0});
 }
 
 function wallX(side, y){
@@ -308,12 +309,26 @@ function step(dt){
   // crumbling
   for(var i=0;i<ledges.length;i++){
     var l = ledges[i];
-    if(l.type !== 'crumble' || l.gone) continue;
+    if(l.type !== 'crumble') continue;
+    if(l.gone){
+      // the wall knits itself back together, then it can be broken again
+      l.re -= dt;
+      if(Math.random() < dt*6) particles.push({x:l.x+Math.random()*l.w, y:l.y+8,
+        vx:(Math.random()*2-1)*14, vy:-26-Math.random()*22, life:0.9, max:0.9,
+        r:1+Math.random()*1.6, c:'#f0b878'});
+      if(l.re <= 0){
+        l.gone = false; l.t = 0;
+        puff(l.x+l.w/2, l.y, 8);
+        chalk(l.x+l.w*0.3, l.y); chalk(l.x+l.w*0.7, l.y);
+      }
+      continue;
+    }
     if(l.t > 0){
       l.t += dt;
       if(l.t > 0.5 && Math.random() < dt*18) grit(l.x+Math.random()*l.w, l.y+6, 1);
       if(l.t > 1.25){
-        l.gone = true; grit(l.x+l.w/2, l.y+6, 16); shake = Math.max(shake, 4);
+        l.gone = true; l.re = REFORM;
+        grit(l.x+l.w/2, l.y+6, 16); shake = Math.max(shake, 4);
         if(P.ledge === l){ detach(0.05); P.vy = 60; combo = 0; }
       }
     }
@@ -478,8 +493,17 @@ function drawLedges(p){
     if(sy < -80 || sy > VH+80) continue;
 
     if(l.gone){
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(l.x, l.y-camY-2, l.w, 4);
+      // a seam that widens and brightens as the ledge comes back
+      var rp = 1 - clamp(l.re/REFORM, 0, 1);
+      var gw = l.w*(0.22 + 0.78*rp), gx = l.x + (l.w-gw)/2;
+      ctx.fillStyle = 'rgba(26,10,22,0.40)';
+      ctx.fillRect(l.x, sy-2, l.w, 3);
+      ctx.fillStyle = 'rgba(255,186,110,'+(0.12 + 0.52*rp*rp)+')';
+      ctx.fillRect(gx, sy-4, gw, 3 + 2*rp);
+      if(rp > 0.82){
+        ctx.fillStyle = 'rgba(255,232,180,'+((rp-0.82)/0.18)*0.5+')';
+        ctx.fillRect(gx, sy-6, gw, 2);
+      }
       continue;
     }
 
