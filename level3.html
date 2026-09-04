@@ -81,6 +81,9 @@
   .total{margin-top:14px;font-size:38px;font-weight:900;font-variant-numeric:tabular-nums;
     color:var(--sign);-webkit-text-stroke:6px var(--ink);paint-order:stroke fill}
 
+  #diag{margin-top:20px;max-width:32ch;font-size:13px;font-weight:800;line-height:1.45;
+    color:#7a1d12;background:#ffd23f;border:3px solid var(--ink);border-radius:12px;
+    padding:11px 14px;box-shadow:0 4px 0 var(--ink)}
   #pausebtn{position:absolute;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
     pointer-events:auto;cursor:pointer;border:3px solid var(--ink);background:var(--white);color:var(--ink);
     width:38px;height:36px;border-radius:12px;font-size:14px;font-weight:900;display:grid;place-items:center;
@@ -110,6 +113,7 @@
   <p>The good matcha is twelve kilometres over the mountain. One rented scooter, a swimsuit, flip flops, and absolutely nothing on this road that intends to move out of your way.</p>
   <div class="keys" id="howto"></div>
   <button class="btn" id="startbtn">Ride</button>
+  <p id="diag">This page needs JavaScript, and it isn&rsquo;t running. If you opened this from a mail or message preview, share &rarr; Save to Files, then open it from Files so it loads in a real browser.</p>
 </div>
 
 <div class="card" id="endcard">
@@ -1610,12 +1614,37 @@ function togglePause(){
   if (G.mode === 'riding'){ G.mode = 'paused'; ui.pause.classList.add('on'); pointerUp(); }
   else if (G.mode === 'paused'){ G.mode = 'riding'; ui.pause.classList.remove('on'); }
 }
-el('startbtn').addEventListener('click', startRide);
-el('againbtn').addEventListener('click', startRide);
-el('restartbtn').addEventListener('click', startRide);
-el('resumebtn').addEventListener('click', togglePause);
-el('pausebtn').addEventListener('click', togglePause);
-el('menubtn').addEventListener('click', ()=>{ location.href = 'index.html'; });
+function showFault(msg){
+  const d = el('diag');
+  if (!d) return;
+  d.style.display = 'block';
+  d.textContent = msg;
+}
+window.addEventListener('error', e=>{
+  showFault('Something broke: ' + (e.message || 'unknown error') +
+            (e.lineno ? ' (line ' + e.lineno + ')' : ''));
+});
+
+/* Some mobile browsers swallow click on elements inside a fixed overlay,
+   so listen for both and debounce the pair. */
+let lastTap = 0;
+function onTap(node, fn){
+  const go = e => {
+    const now = Date.now();
+    if (now - lastTap < 400) return;
+    lastTap = now;
+    if (e && e.cancelable) e.preventDefault();
+    try { fn(); } catch(err){ showFault('Something broke: ' + err.message); }
+  };
+  node.addEventListener('click', go);
+  node.addEventListener('touchend', go, {passive:false});
+}
+onTap(el('startbtn'),   startRide);
+onTap(el('againbtn'),   startRide);
+onTap(el('restartbtn'), startRide);
+onTap(el('resumebtn'),  togglePause);
+onTap(el('pausebtn'),   togglePause);
+onTap(el('menubtn'),    ()=>{ location.href = 'index.html'; });
 
 const canTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 ui.howto.innerHTML = canTouch
@@ -1640,6 +1669,7 @@ function frame(now){
   syncHUD();
 }
 
+el('diag').style.display = 'none';
 window.addEventListener('resize', resize);
 resize();
 resetGame();
