@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#163d43">
+<title>Canyon Runner — Stacies Packraft down the Canyon</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;overflow:hidden;background:#211521;color:#fff3d5;font-family:"Trebuchet MS",system-ui,sans-serif}button,a{touch-action:manipulation}#stage{position:relative;margin:auto;width:min(100vw,60vh);height:100%;overflow:hidden;background:#286c70}canvas{width:100%;height:100%;display:block;touch-action:none}#river{position:absolute;inset:0;opacity:0}#scene{position:absolute;inset:0}.top{z-index:1}.controls{z-index:2}.top{position:absolute;top:max(16px,env(safe-area-inset-top));left:16px;right:16px;display:flex;justify-content:space-between;align-items:start;pointer-events:none}.label{font-size:12px;letter-spacing:.14em;color:#f2cca0}.value{font-weight:900;font-size:22px;text-shadow:0 2px #163d43}.right{text-align:right}#pause{pointer-events:auto;margin-top:8px;background:#183d42cc;color:#fff3d5;border:1px solid #ffffff55;border-radius:8px;padding:7px 12px;font:inherit}.progress{height:4px;background:#193d42;position:absolute;top:0;left:0;right:0}.progress i{display:block;height:100%;background:#ffc85e;width:0}.controls{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));left:16px;right:16px;display:flex;gap:18px}.paddle{width:50%;height:82px;border:2px solid #ffe3a0;border-radius:18px;background:#f1bd60;color:#362626;box-shadow:0 5px 0 #9d623c;font:900 19px "Trebuchet MS",sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}.paddle small{display:block;font-size:12px;font-weight:700;margin-top:5px}.paddle.down{transform:translateY(4px);box-shadow:0 1px 0 #9d623c;background:#ffe1a0}.paddle.drag{background:#b4e2d9}.veil{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(#17252a88,#17252aeF);overflow:auto}.veil[hidden]{display:none}.card{max-width:340px;text-align:center}.eyebrow{font-size:12px;letter-spacing:.2em;color:#ffc85e;font-weight:bold}h1{font-size:clamp(32px,8vw,46px);line-height:1.02;letter-spacing:-.045em;margin:16px 0}h1 em{display:block;color:#ffc85e;font-style:normal}.card p{font-size:16px;line-height:1.55;color:#e0e6da}.instructions{border-top:1px solid #ffffff33;border-bottom:1px solid #ffffff33;padding:14px 0}.go{background:#ffc85e;color:#332625;font-family:inherit;font-size:18px;font-weight:900;border:0;border-radius:10px;padding:15px 26px;cursor:pointer}.menu{display:block;color:#cfdfd5;margin-top:20px;font-size:14px}button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:4px}#message{position:absolute;top:110px;left:20px;right:20px;text-align:center;font-size:15px;font-weight:bold;pointer-events:none;text-shadow:0 2px 4px #17393c}#speech{position:absolute;z-index:2;max-width:210px;padding:10px 13px;border:2px solid #503a2b;border-radius:14px;background:#fff4d9;color:#503a2b;font-size:15px;font-weight:bold;pointer-events:none;box-shadow:0 3px #503a2b33}#speech[hidden]{display:none}@media(max-height:600px){.paddle{height:58px}.card p{font-size:14px}h1{font-size:30px;margin:8px 0}.instructions{padding:7px 0}.menu{margin-top:12px}}
+#stage.cinematic .controls{opacity:0;pointer-events:none}#stage.cinematic:before,#stage.cinematic:after{content:"";position:absolute;left:0;right:0;height:7%;background:#10171b;z-index:3;pointer-events:none}#stage.cinematic:before{top:0}#stage.cinematic:after{bottom:0}#stage.cinematic .top{top:9%}#stage.cinematic #message{top:auto;bottom:12%;z-index:4;font-size:19px;color:#fff3d5}.controls{transition:opacity .3s}#current{font-size:12px;color:#ffe3a0;letter-spacing:.1em;margin-top:5px}
+</style>
+</head>
+<body>
+<main id="stage">
+<canvas id="scene" aria-hidden="true"></canvas>
+<canvas id="river" aria-label="Stacie packrafting through the Grand Canyon. Use the left and right paddle buttons or arrow keys."></canvas>
+<div class="progress"><i id="progress"></i></div>
+<div class="top"><div><div class="label">STACIE · GRAND CANYON</div><div class="value" id="distance">0 / 2,400 m</div><div id="current"></div></div><div class="right"><div class="value" id="health">♥ ♥ ♥</div><button id="pause" aria-label="Pause game">Ⅱ</button></div></div>
+<div id="message" role="status"></div><div id="speech" hidden></div>
+<div class="controls"><button class="paddle" id="left" aria-label="Left paddle: tap to stroke, hold to brake and turn left">↙ LEFT<small>TAP: PADDLE · HOLD: TURN</small></button><button class="paddle" id="right" aria-label="Right paddle: tap to stroke, hold to brake and turn right">RIGHT ↘<small>TAP: PADDLE · HOLD: TURN</small></button></div>
+<div class="veil" id="overlay"><div class="card"><div class="eyebrow">CANYON RUNNER / LEVEL 05</div><h1 id="title">Stacies Packraft<em>down the Canyon</em></h1><p id="description">One little packraft. A very grand canyon.<br>Get Stacie to the take-out in one piece.</p><p class="instructions" id="instructions"><b>Tap either paddle</b> to move forward.<br><b>Hold left or right</b> to brake and turn that way. Hold both to slow down.<br>Avoid rocks, driftwood, and the banks.<br><small>Keyboard: ← / → or A / D · P to pause</small></p><button class="go" id="start">Push off</button><a class="menu" href="index.html">Back to all levels</a></div></div>
+</main>
+<script src="vendor/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+const W=420,H=760,LENGTH=12000,BOAT_Y=510,HOLD=.22;
+const $=id=>document.getElementById(id),canvas=$('river'),ctx=canvas.getContext('2d');
+const input={left:{down:false,time:0,stroke:0},right:{down:false,time:0,stroke:0}};
+const FALL={at:6000,drop:180,duration:6};
+let pausedFrom='play';
+let mode='title',last=0,acc=0,game,objects=[],men=[],rocks=[],ripples=[],activeMan=null;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function center(d){return 210+38*Math.sin(d/710)+17*Math.sin(d/293)}
+function width(d){return 254-18*Math.sin(d/523)}
+function banks(d){let c=center(d),w=width(d);return {left:c-w/2,right:c+w/2}}
+function resize(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2.5);canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);ctx.setTransform(canvas.width/W,0,0,canvas.height/H,0,0)}
+function reset(){game={d:0,x:center(0),angle:0,speed:142.5,hp:3,inv:0,time:0,hits:0,bonks:0,toast:4,current:1.5,waterfallDone:false,fallTime:0,fallY:0};objects=[];men=[];rocks=[];ripples=[];activeMan=null;
+ for(let i=0,d=570;d<LENGTH-450;i++,d+=290){if(d>FALL.at-500&&d<FALL.at+750)continue;const c=center(d),w=width(d);let side=[-.29,.26,0,-.24,.3][i%5];objects.push({d,x:c+w*side,r:i%4===2?25:20,type:i%6===4?'log':'rock',hit:false});}
+ [2700,7800,10600].forEach((d,i)=>{const side=i%2===0?'left':'right';men.push({d,side,x:banks(d)[side]+(side==='left'?-20:20),seen:false,down:false,targeted:false,speech:0,text:['You have pretty eyes!','Your smile lights up the canyon!','You make that life jacket look good!'][i]});});
+ setCinematic(false);clearInput();$('message').textContent='Tap to paddle. Hold to turn. Find your rhythm.';updateHUD();}
+function hush(){if(window.speechSynthesis)window.speechSynthesis.cancel()}
+function yell(text){if(!window.speechSynthesis||!window.SpeechSynthesisUtterance)return;try{hush();const voice=new window.SpeechSynthesisUtterance(text);voice.rate=1.04;voice.pitch=.85;voice.volume=1;window.speechSynthesis.speak(voice)}catch(e){/* Speech bubbles remain available without browser audio. */}}
+function clearInput(){Object.keys(input).forEach(k=>{input[k].down=false;input[k].time=0;$(k).classList.remove('down','drag')})}
+function begin(){hush();reset();mode='play';$('overlay').hidden=true;$('pause').textContent='Ⅱ'}
+function press(side){if(mode!=='play'||input[side].down)return;const p=input[side];p.down=true;p.time=0;p.stroke=.3;game.speed=Math.min(220*game.current,game.speed+25*game.current);$(side).classList.add('down');ripples.push({x:game.x+(side==='left'?-23:23),d:game.d,age:0})}
+function release(side){input[side].down=false;input[side].time=0;$(side).classList.remove('down','drag')}
+for(const side of ['left','right']){const b=$(side);b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);press(side)});for(const type of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(type,()=>release(side));b.addEventListener('contextmenu',e=>e.preventDefault());}
+function pause(){if(mode==='play'||mode==='cinematic'){pausedFrom=mode;mode='pause';hush();clearInput();$('title').innerHTML='Taking a<em>river break</em>';$('description').textContent='Stacie is holding her spot.';$('instructions').hidden=true;$('start').textContent='Keep floating';$('overlay').hidden=false;}else if(mode==='pause'){mode=pausedFrom;$('overlay').hidden=true;}}
+$('pause').onclick=pause;$('start').onclick=()=>mode==='pause'?pause():begin();
+window.addEventListener('keydown',e=>{const side=({ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'})[e.key];if(side){e.preventDefault();if(!e.repeat)press(side)}if((e.key==='p'||e.key==='P'||e.key==='Escape')&&!e.repeat)pause()});
+window.addEventListener('keyup',e=>{const side=({ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'})[e.key];if(side)release(side)});
+window.addEventListener('blur',()=>{if(mode==='play'||mode==='cinematic')pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&(mode==='play'||mode==='cinematic'))pause()});window.addEventListener('resize',resize);
+function screenY(d){return BOAT_Y-(d-game.d)}
+canvas.addEventListener('pointerdown',e=>{if(mode!=='play')return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;const m=window.__pickShore?window.__pickShore(x/W,y/H):null;if(m){m.targeted=true;rocks.push({x:game.x,d:game.d,m,t:0});activeMan=null;}});
+function hurt(){if(game.inv>0)return;game.hp--;game.hits++;game.inv=2;game.speed*=.5;game.toast=2;$('message').textContent=game.hp?'Oof! Watch the pointy bits.':'That’s a swim.';if(game.hp<=0)finish(false)}
+function finish(win){hush();mode=win?'win':'over';clearInput();$('speech').hidden=true;$('title').innerHTML=win?'Take-out!<em>Stacie made it.</em>':'Unexpected<em>swim break.</em>';$('description').textContent=(win?'2,400 m of canyon conquered. ':Math.floor(game.d/5)+' m downriver. ')+game.hits+' bumps · '+game.bonks+' shore-side surprises.';$('instructions').hidden=false;$('instructions').textContent=win?'The raft is small. The achievement is grand.':'Tap for speed. Hold a paddle early to steer around trouble.';$('start').textContent=win?'Float it again':'Try again';$('overlay').hidden=false;}
+function updateHUD(){$('current').textContent=game.current===3?'FAST WATER · 2× CURRENT':'';$('distance').textContent=Math.min(2400,Math.floor(game.d/5)).toLocaleString()+' / 2,400 m';$('health').textContent='♥ '.repeat(game.hp)+'♡ '.repeat(3-game.hp);$('progress').style.width=(game.d/LENGTH*100)+'%'}
+function setCinematic(on){$('stage').classList.toggle('cinematic',on);$('left').disabled=on;$('right').disabled=on}
+function startWaterfall(){mode='cinematic';game.fallTime=0;game.fallStartX=game.x;game.d=FALL.at-100;clearInput();hush();activeMan=null;setCinematic(true);$('message').textContent='THE DROP · 1,200 m';}
+function updateWaterfall(dt){game.time+=dt;game.fallTime=Math.min(FALL.duration,game.fallTime+dt);const t=game.fallTime;
+ if(t<1.5){const p=t/1.5;game.d=FALL.at-100+100*p;game.fallY=0;game.x=game.fallStartX+(center(FALL.at)-game.fallStartX)*p;}
+ else if(t<3.5){const p=(t-1.5)/2;game.d=FALL.at+110*p;game.fallY=-FALL.drop*p*p;game.x=center(game.d);$('message').textContent='Hang on, Stacie!';}
+ else{const p=(t-3.5)/2.5;game.d=FALL.at+110+210*p;game.fallY=-FALL.drop+Math.sin(p*Math.PI*3)*8*(1-p);game.x=center(game.d);$('message').textContent='That just got a lot faster.';}
+ game.angle=0;updateHUD();if(t>=FALL.duration){game.waterfallDone=true;game.current=3;game.speed=288;game.inv=3;game.toast=4;game.fallY=-FALL.drop;mode='play';setCinematic(false);clearInput();updateHUD();}}
+function update(dt){if(mode==='cinematic'){updateWaterfall(dt);return}if(mode!=='play')return;
+ if(!game.waterfallDone&&game.d>=FALL.at-100){startWaterfall();return}
+game.time+=dt;game.inv=Math.max(0,game.inv-dt);game.toast-=dt;if(game.toast<=0)$('message').textContent='';
+ for(const side of ['left','right']){const p=input[side];if(p.down)p.time+=dt;p.stroke=Math.max(0,p.stroke-dt);$(side).classList.toggle('drag',p.down&&p.time>=HOLD)}
+ const l=input.left.down&&input.left.time>=HOLD,r=input.right.down&&input.right.time>=HOLD,drag=Number(l)+Number(r);
+ game.angle+=(Number(r)-Number(l))*1.45*dt;game.angle*=Math.exp(-.9*dt);game.angle=clamp(game.angle,-1,1);
+ const target=(drag===2?30:drag===1?54:96)*game.current;game.speed+=(target-game.speed)*(drag?2.8:.65)*dt;
+ game.d+=Math.max(20,game.speed*Math.cos(game.angle))*dt;game.x+=Math.sin(game.angle)*game.speed*dt;
+ const b=banks(game.d);if(game.x<b.left+16||game.x>b.right-16){hurt();game.x=clamp(game.x,b.left+18,b.right-18);game.angle*= -.35}
+ for(const o of objects){if(!o.hit&&Math.abs(o.d-game.d)<o.r+20&&Math.abs(o.x-game.x)<(o.type==='log'?42:o.r)+12){o.hit=true;hurt();}}
+ for(const m of men){if(!m.seen&&m.d-game.d<850*game.current){m.seen=true;m.speech=12;activeMan=m;yell(m.text);}m.speech=Math.max(0,m.speech-dt);}
+ for(const rock of rocks){rock.t+=dt;if(rock.t>=.5&&!rock.m.down){rock.m.down=true;hush();rock.m.speech=2;game.bonks++;activeMan=rock.m;game.toast=2;$('message').textContent='Stacie has excellent aim.';}}
+ rocks=rocks.filter(r=>r.t<.65);ripples.forEach(r=>r.age+=dt);ripples=ripples.filter(r=>r.age<1);
+ if(game.d>=LENGTH)finish(true);updateHUD();}
+function draw(){if(window.__renderRaft)window.__renderRaft()}
+function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;acc+=dt;while(acc>=1/120){update(1/120);acc-=1/120}draw();requestAnimationFrame(frame)}
+reset();resize();requestAnimationFrame(frame);
+// Deterministic state access follows the existing levels' lightweight test hooks.
+window.__RAFT={start:begin,step:update,state:()=>game,objects:()=>objects,men:()=>men,press,release,pause,mode:()=>mode,input:()=>input,rocks:()=>rocks,activeMan:()=>activeMan,fall:FALL};
+})();
+</script>
+<script src="level5-scene.js"></script>
+</body>
+</html>
