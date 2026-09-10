@@ -42,7 +42,7 @@ button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:4px}
 <canvas id="game" aria-label="Vin running up a sandstone approach trying to keep Wayne in sight. Hold to accelerate, release to jump, and swipe left or right to change lanes."></canvas>
 <div class="progress"><i id="progress"></i></div>
 <div class="top">
-  <div><div class="label">VIN · SANDSTONE APPROACH</div><div class="value" id="distance">0 / 2.4 km</div></div>
+  <div><div class="label">VIN · SANDSTONE APPROACH</div><div class="value" id="distance">0 / 2.4 km</div><div id="climb" style="font-size:14px;font-weight:900;margin-top:5px;color:#ffe4a1;text-shadow:0 2px 4px #32190e">↑ +0 m elevation</div></div>
   <div class="right"><div class="label">WAYNE GAP</div><div class="value" id="gap">38 m</div><button id="pause" aria-label="Pause game">Ⅱ</button></div>
 </div>
 <div id="velocity" style="position:absolute;left:20px;bottom:90px;z-index:2;pointer-events:none;font-weight:900;font-style:italic;font-size:32px;text-shadow:0 3px 12px #23150b"><span id="speed">0</span><small style="font-size:12px;display:block;letter-spacing:.15em">KM/H · APPROACH PACE</small></div>
@@ -125,7 +125,7 @@ function reset(){
 }
 function begin(){
   runHeld=false;keyHeld=false;pointer=null;
-  reset();mode='play';$('overlay').hidden=true;$('pause').textContent='Ⅱ';
+  reset();rushDistance=0;mode='play';$('overlay').hidden=true;$('pause').textContent='Ⅱ';
 }
 function pause(){
   if(mode==='play'){pausedFrom='play';mode='pause';runHeld=false;keyHeld=false;pointer=null;
@@ -140,7 +140,7 @@ function finish(win){
   if(win){
     $('title').innerHTML='Summit-ish!<em>Wayne waited.</em>';
     $('description').textContent='Vin survived the approach with '+game.hits+' crashes. Wayne claims he was walking.';
-    $('instructions').textContent='2.4 km climbed at a deeply unreasonable pace.';
+    $('instructions').textContent='2.4 km climbed. '+Math.round(elevation(LENGTH))+' m gained. Wayne calls that a warm-up.';
     $('start').textContent='Ascend again';
   }else{
     $('title').innerHTML='Wayne has achieved<em>low Earth orbit.</em>';
@@ -157,7 +157,7 @@ function changeLane(dir){
 }
 function jump(){
   if(mode!=='play'||!game.onGround)return;
-  game.onGround=false;game.jumpV=27;
+  game.onGround=false;game.jumpV=32;
   game.jumpY=.01;
   $('message').textContent='AIRBORNE. THIS IS NOT HIKING.';game.toast=.9;
 }
@@ -172,6 +172,7 @@ function updateHUD(){
   $('distance').textContent=(Math.min(LENGTH,game.d)/1000).toFixed(2)+' / 2.4 km';
   $('gap').textContent=Math.round(game.gap)+' m';
   $('speed').textContent=Math.round(game.speed*7.9*3.6);
+  $('climb').textContent='↑ +'+Math.round(elevation(game.d))+' m elevation';
   const next=objects.find(o=>o.wide&&!o.hit&&o.d-game.d>18);
   if(game.toast<=0&&next&&next.d-game.d<125)$('message').textContent=(next.ravine?'CREVASSE':'RIVER')+' · '+Math.round(next.d-game.d)+' m · RELEASE TO LEAP';
   $('progress').style.width=(game.d/LENGTH*100)+'%';
@@ -209,7 +210,7 @@ function update(dt){
 
   if(!game.onGround){
     game.jumpY+=game.jumpV*dt;
-    game.jumpV-=34*dt;
+    game.jumpV-=32*dt;
     if(game.jumpY<=0){game.jumpY=0;game.jumpV=0;game.onGround=true;}
   }
 
@@ -274,7 +275,14 @@ function stratify(material,scale){
 }
 stratify(sandstone,1.1);stratify(trailMat,3.);stratify(darkRock,1.8);
 function mesh(geo,material,parent,x=0,y=0,z=0){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);parent.add(m);return m;}
-function box(w,h,d,material,parent,x=0,y=0,z=0){return mesh(new THREE.BoxGeometry(w,h,d),material,parent,x,y,z);}
+function curve(d){return 30*Math.sin(d*.008)+15*Math.sin(d*.017+.6)-15*Math.sin(.6);}
+// A continuous 13–24% uphill grade: even bends and river banks gain elevation.
+function elevation(d){return d*.185+5*Math.sin(d*.007)+2*Math.sin(d*.012);}
+function grade(d){return .185+.035*Math.cos(d*.007)+.024*Math.cos(d*.012);}
+function slope(d){return .24*Math.cos(d*.008)+.255*Math.cos(d*.017+.6);}
+function box(w,h,d,material,parent,x=0,y=0,z=0){
+ return mesh(new THREE.BoxGeometry(w,h,d,1,1,parent===course?Math.max(1,Math.ceil(d/10)):1),material,parent,x,y,z);
+}
 const world=new THREE.Group();scene.add(world);
 const course=new THREE.Group();world.add(course);
 const scenery=new THREE.Group();scene.add(scenery);
@@ -297,15 +305,26 @@ for(let i=0;i<54;i++){
  geo.computeVertexNormals();geo.translate(0,height/2-20,0);
  const rock=mesh(geo,sandstone,scenery,side*(49+noise(i+4)*28),0,-depth);
  rock.rotation.y=i*1.3;rock.scale.z=1.25+noise(i)*.5;
- cliffs.push({mesh:rock,offset:depth});
+ cliffs.push({mesh:rock,offset:depth,sideX:rock.position.x});
 }
 // Far walls stay in the haze; changing near walls create strong parallax.
 for(let i=0;i<9;i++){
  const h=90+noise(i+200)*110;
  const g=new THREE.CylinderGeometry(18,42,h,8,12);g.translate(0,h/2-20,0);
- mesh(g,sandstone,scene,(i-4)*72,-4,-650-noise(i+100)*180);
+ const distance=650+noise(i+100)*180;
+ mesh(g,sandstone,scene,(i-4)*72,elevation(distance)-12,-distance);
 }
 const green=mat('#667452'),stemMat=mat('#6b6245'),shoeMat=mat('#252b2a');
+// Close shoulder rocks and scrub race past much faster than the distant walls.
+const rush=[];
+const rushRockGeo=new THREE.DodecahedronGeometry(1,0);
+const rushShrubGeo=new THREE.IcosahedronGeometry(.6,0);
+for(let i=0;i<100;i++){
+ const isShrub=i%4===0;
+ const m=mesh(isShrub?rushShrubGeo:rushRockGeo,isShrub?green:darkRock,scenery);
+ m.scale.set(1+noise(i+31)*1.5,.4+noise(i+71)*1.4,1.5+noise(i+81)*2);
+ rush.push({mesh:m,offset:i*5.2,sideX:(i%2?1:-1)*(9+noise(i+60)*18)});
+}
 const skin=mat('#c79570'),hair=mat('#302c29'),shorts=mat('#263f49'),packMat=mat('#273d44');
 function runner(shirtColor){
  const root=new THREE.Group(),body=new THREE.Group();root.add(body);
@@ -397,7 +416,22 @@ function rebuildCourse(){
   rock.scale.y=.5;
  }
 }
-let boost=0,visualTime=0,previousY=0,landing=0;
+// Bend the actual ground, banks, water and obstacles together, keeping gaps aligned.
+function bendCourse(){
+ for(const child of course.children){
+  if(child.isMesh){
+   const p=child.geometry.attributes.position;
+   const center=-child.position.z;
+   for(let i=0;i<p.count;i++){
+    const d=-(p.getZ(i)+child.position.z);
+    p.setXYZ(i,p.getX(i)+curve(d)-curve(center),p.getY(i)+elevation(d)-elevation(center),p.getZ(i));
+   }
+   child.position.x+=curve(center);child.position.y+=elevation(center);
+   p.needsUpdate=true;child.geometry.computeVertexNormals();child.geometry.computeBoundingSphere();
+  }else {child.position.x+=curve(-child.position.z);child.position.y+=elevation(-child.position.z);}
+ }
+}
+let boost=0,visualTime=0,previousY=0,landing=0,rushDistance=0;
 const wayneLabel=document.createElement('div');wayneLabel.textContent='WAYNE';
 wayneLabel.style.cssText='position:absolute;z-index:2;font-size:12px;font-weight:900;color:#f8ffff;text-shadow:0 2px 5px #123;pointer-events:none;transform:translate(-50%,-100%);letter-spacing:.12em';
 $('stage').appendChild(wayneLabel);
@@ -426,29 +460,46 @@ function draw(){
  visualTime+=dt;
  const active=mode==='play'&&(runHeld||keyHeld),wanted=active?clamp((game.speed-4)/8.6,0,1):0;
  boost=lerp(boost,wanted,Math.min(1,dt*5));
- const d=game.d;world.position.z=d;
- for(const c of cliffs)c.mesh.position.z=35-((c.offset+d)%729);
+ const d=game.d;world.position.set(-curve(d),-elevation(d),d);
+ if(mode==='play')rushDistance+=game.speed*7.9*dt*(1.25+boost*1.65);
+ for(const c of cliffs){
+  const rel=(((c.offset-rushDistance*.64)%729+729)%729)-35;
+  c.mesh.position.set(c.sideX+curve(d+rel)-curve(d),elevation(d+rel)-elevation(d),-rel);
+ }
+ for(const r of rush){
+  const rel=(((r.offset-rushDistance)%520+520)%520)-25;
+  r.mesh.position.set(r.sideX+curve(d+rel)-curve(d),.3+elevation(d+rel)-elevation(d),-rel);
+  r.mesh.visible=!objects.some(o=>o.wide&&Math.abs(o.d-(d+rel))<21);
+ }
  for(const h of hazards)h.group.visible=Math.abs(h.object.d-d)<420;
  for(let i=0;i<waterLines.length;i++)waterLines[i].scale.x=1+Math.sin(visualTime*2+i)*.18;
  vin.root.position.set(game.laneX/92*4.2,game.jumpY,0);
- vin.root.rotation.z=clamp((game.targetX-game.laneX)/92,-1,1)*-.18;
+ const turn=(slope(d+22)-slope(d-22));
+ vin.root.rotation.y=-Math.atan(slope(d));
+ vin.root.rotation.x=Math.atan(grade(d));
+ vin.shadow.rotation.x=-Math.PI/2+Math.atan(grade(d));
+ vin.root.rotation.z=clamp((game.targetX-game.laneX)/92,-1,1)*-.18+turn*.35;
  vin.root.visible=!(game.inv>0&&Math.floor(game.inv*12)%2===0);
  pose(vin,game.time,game.speed,!game.onGround);
  vin.shadow.position.set(vin.root.position.x,.08,0);vin.shadow.scale.setScalar(1+game.jumpY*.07);
  vin.shadow.material.opacity=.28/(1+game.jumpY*.25);
  const overGap=objects.some(o=>o.wide&&Math.abs(o.d-d)<18);vin.shadow.visible=!overGap;
  const wz=-game.gap;
- wayne.root.position.set(Math.sin(game.time*.9)*2,Math.max(0,Math.sin(game.time*1.7))*.2,wz);
+ wayne.root.rotation.y=-Math.atan(slope(d+game.gap));
+ wayne.root.rotation.x=Math.atan(grade(d+game.gap));
+ const wayneElevation=elevation(d+game.gap)-elevation(d);
+ wayne.root.position.set(curve(d+game.gap)-curve(d)+Math.sin(game.time*.9)*2,wayneElevation+Math.max(0,Math.sin(game.time*1.7))*.2,wz);
  const wayneGap=objects.find(o=>o.wide&&Math.abs(o.d-(d+game.gap))<48);
- if(wayneGap)wayne.root.position.y=Math.sin(clamp((48+(d+game.gap-wayneGap.d))/96,0,1)*Math.PI)*10;
- wayne.root.visible=game.wayneVisible;pose(wayne,game.time+2,12,wayne.root.position.y>1);
- wayne.shadow.position.set(wayne.root.position.x,.08,wz);wayne.shadow.visible=game.wayneVisible&&!wayneGap;
+ if(wayneGap)wayne.root.position.y=wayneElevation+Math.sin(clamp((48+(d+game.gap-wayneGap.d))/96,0,1)*Math.PI)*10;
+ wayne.root.visible=game.wayneVisible;pose(wayne,game.time+2,12,wayne.root.position.y-wayneElevation>1);
+ wayne.shadow.position.set(wayne.root.position.x,wayneElevation+.08,wz);wayne.shadow.rotation.x=-Math.PI/2+Math.atan(grade(d+game.gap));wayne.shadow.visible=game.wayneVisible&&!wayneGap;
  if(previousY>0&&game.onGround)landing=.23;
  previousY=game.jumpY;landing=Math.max(0,landing-dt);
  camera.fov=lerp(camera.fov,65+boost*29,Math.min(1,dt*6));camera.updateProjectionMatrix();
  const shake=(mode==='play'?boost*.035+landing*.28:0);
- camera.position.set(vin.root.position.x*.36+Math.sin(visualTime*83)*shake,6.3+game.jumpY*.62+Math.cos(visualTime*71)*shake,15.5+boost*2.5);
- camera.lookAt(vin.root.position.x*.2,2.5+game.jumpY*.18,-35);
+ camera.position.set(curve(d-16)-curve(d)+vin.root.position.x*.36+Math.sin(visualTime*83)*shake,6.3+game.jumpY*.62+Math.cos(visualTime*71)*shake,15.5+boost*2.5);
+ camera.lookAt(curve(d+40)-curve(d)+vin.root.position.x*.2,2.5+elevation(d+40)-elevation(d)+game.jumpY*.18,-40);
+ camera.rotateZ(-turn*.065);
  renderer.render(scene,camera);drawSpeed(dt);
  projected.copy(wayne.root.position);projected.y+=3.7;projected.project(camera);
  wayneLabel.hidden=!game.wayneVisible||projected.z>1||Math.abs(projected.x)>1;
