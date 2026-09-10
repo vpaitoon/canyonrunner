@@ -57,7 +57,7 @@ button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:4px}
     <p id="description">Wayne has started the approach.<br>Unfortunately, Wayne approaches things at approximately escape velocity.</p>
     <p class="instructions" id="instructions">
       <b>Hold the screen</b> to accelerate.<br>
-      <b>Release</b> to leap rivers and crevasses.<br>
+      <b>Release</b> to jump creeks and fallen logs.<br>
       <b>Swipe left or right</b> to change lanes.<br>
       Keep Wayne somewhere near the visible universe.<br>
       <small>Keyboard: hold Space/↑ to run · release to jump · ← / → to change lanes · P to pause</small>
@@ -108,8 +108,8 @@ function seedObjects(){
     d += 75 + ((i*47)%92);
     const lane=(i*7+1)%3;
     const roll=i%9;
-    let type=roll===1||roll===6?'creek':roll===3?'rock':roll===5?'sage':'none';
-    if(type!=='none')objects.push({d,lane,type,hit:false,wide:type==='creek',ravine:i%2===0});
+    let type=roll===1||roll===6?'creek':roll===3?'log':roll===5?'sage':'none';
+    if(type!=='none')objects.push({d,lane,type,hit:false,wide:type==='creek',ravine:false});
     i++;
   }
 }
@@ -119,22 +119,24 @@ function reset(){
     jumpY:0,jumpV:0,onGround:true,time:0,hits:0,stalls:0,
     inv:0,toast:3,wayneVisible:true,waynePhase:0,finishBurst:0
   };
-  seedObjects();dust=[];streaks=[];if(typeof rebuildCourse==='function')rebuildCourse();
+  seedObjects();dust=[];streaks=[];rebuildCourse();bendCourse();
   $('message').textContent='Wayne is already moving. This seems unnecessary.';
   updateHUD();
 }
 function begin(){
+  stopWayneVoice();storyIndex=-1;
   runHeld=false;keyHeld=false;pointer=null;
   reset();rushDistance=0;mode='play';$('overlay').hidden=true;$('pause').textContent='Ⅱ';
 }
 function pause(){
-  if(mode==='play'){pausedFrom='play';mode='pause';runHeld=false;keyHeld=false;pointer=null;
+  if(mode==='play'){stopWayneVoice();pausedFrom='play';mode='pause';runHeld=false;keyHeld=false;pointer=null;
     $('title').innerHTML='Catching your<em>breath?</em>';
     $('description').textContent='Wayne is not catching his.';
     $('instructions').hidden=true;$('start').textContent='Resume pursuit';$('overlay').hidden=false;
   }else if(mode==='pause'){mode=pausedFrom;$('overlay').hidden=true;}
 }
 function finish(win){
+  stopWayneVoice();
   mode=win?'win':'over';runHeld=false;keyHeld=false;
   $('instructions').hidden=false;
   if(win){
@@ -165,7 +167,7 @@ function hurt(o){
   if(game.inv>0||mode!=='play')return;
   game.inv=1.1;game.hits++;game.speed*=.38;game.gap+=17;o.hit=true;
   game.jumpV=9;game.onGround=false;game.jumpY=1;
-  $('message').textContent=o.type==='creek'?'That leap needed more ambition.':o.type==='sage'?'Sagebrush: 1 · Vin: 0':'That rock was extremely stationary.';
+  $('message').textContent=o.type==='log'?'The log has declined to move.':o.type==='creek'?'That leap needed more ambition.':o.type==='sage'?'Sagebrush: 1 · Vin: 0':'That rock was extremely stationary.';
   game.toast=1.5;
 }
 function updateHUD(){
@@ -173,8 +175,8 @@ function updateHUD(){
   $('gap').textContent=Math.round(game.gap)+' m';
   $('speed').textContent=Math.round(game.speed*7.9*3.6);
   $('climb').textContent='↑ +'+Math.round(elevation(game.d))+' m elevation';
-  const next=objects.find(o=>o.wide&&!o.hit&&o.d-game.d>18);
-  if(game.toast<=0&&next&&next.d-game.d<125)$('message').textContent=(next.ravine?'CREVASSE':'RIVER')+' · '+Math.round(next.d-game.d)+' m · RELEASE TO LEAP';
+  const next=objects.find(o=>(o.wide||o.type==='log')&&!o.hit&&o.d-game.d>18);
+  if(game.toast<=0&&next&&next.d-game.d<125)$('message').textContent=(next.type==='log'?'LOG':'CREEK')+' · '+Math.round(next.d-game.d)+' m · RELEASE TO LEAP';
   $('progress').style.width=(game.d/LENGTH*100)+'%';
   $('gapfill').style.width=clamp((game.gap-20)/115*100,0,100)+'%';
 }
@@ -217,7 +219,7 @@ function update(dt){
   for(const o of objects){
     if(o.hit)continue;
     const dy=o.d-game.d;
-    if(dy>-(o.wide?18:5)&&dy<(o.wide?18:8)&&(o.wide||o.lane===game.lane)){
+    if(dy>-(o.wide?18:5)&&dy<(o.wide?18:8)&&(o.wide||o.type==='log'||o.lane===game.lane)){
       if(o.type==='creek'){
         if(game.jumpY<2.3)hurt(o);
         else if(dy < -15)o.hit=true;
@@ -257,7 +259,7 @@ scene.add(new THREE.HemisphereLight(0xccefff,0x7e4428,2.15));
 const sun=new THREE.DirectionalLight(0xffebc1,3.3);sun.position.set(-90,170,60);scene.add(sun);
 const rim=new THREE.DirectionalLight(0xb8dcff,.65);rim.position.set(70,70,-130);scene.add(rim);
 const mat=(color,roughness=1)=>new THREE.MeshStandardMaterial({color,roughness});
-const sandstone=mat('#c57848'),trailMat=mat('#db9d62'),darkRock=mat('#995638');
+const sandstone=mat('#c57848'),trailMat=mat('#e8bd78'),darkRock=mat('#995638');
 // Geological strata follow geometry, including the sides of the river cuts.
 function stratify(material,scale){
  material.onBeforeCompile=shader=>{
@@ -273,7 +275,16 @@ function stratify(material,scale){
     diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.13,1.10,.96),smoothstep(53.,100.,vStone.y));`);
  };return material;
 }
-stratify(sandstone,1.1);stratify(trailMat,3.);stratify(darkRock,1.8);
+stratify(sandstone,1.1);stratify(darkRock,1.8);
+trailMat.onBeforeCompile=shader=>{
+ shader.vertexShader='varying vec3 vSand;\n'+shader.vertexShader;
+ shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvSand=position;');
+ shader.fragmentShader='varying vec3 vSand;\n'+shader.fragmentShader;
+ shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+ float grain=fract(sin(dot(floor(vSand.xz*55.),vec2(12.9898,78.233)))*43758.5453);
+ float ripple=sin(vSand.z*9.+sin(vSand.x*.8)*1.8)*.025;
+ diffuseColor.rgb*=.92+grain*.15+ripple;`);
+};
 function mesh(geo,material,parent,x=0,y=0,z=0){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);parent.add(m);return m;}
 function curve(d){return 30*Math.sin(d*.008)+15*Math.sin(d*.017+.6)-15*Math.sin(.6);}
 // A continuous 13–24% uphill grade: even bends and river banks gain elevation.
@@ -346,8 +357,8 @@ function runner(shirtColor){
   mesh(new THREE.CylinderGeometry(.2,.155,.55,9),shorts,leg,0,-.24,0);
   const knee=new THREE.Group();knee.position.y=-.49;leg.add(knee);
   mesh(new THREE.CylinderGeometry(.125,.085,.49,8),skin,knee,0,-.22,0);
-  box(.23,.2,.46,shoeMat,knee,0,-.5,-.11);
-  limbs.push({arm,leg,knee,side});
+  const boot=box(.23,.2,.46,shoeMat,knee,0,-.5,-.11);
+  limbs.push({arm,leg,knee,side,boot});
  }
  root.scale.setScalar(1.2);scene.add(root);
  const shadow=mesh(new THREE.CircleGeometry(.68,24),new THREE.MeshBasicMaterial({color:0x2b2119,transparent:true,opacity:.28,depthWrite:false}),scene);
@@ -358,7 +369,7 @@ const vin=runner('#ffcc49'),wayne=runner('#51bfc6');
 function pose(r,time,speed,air){
  const stride=time*(8+speed*1.25);
  r.body.rotation.x=air?-.35:-.12-speed*.012;
- r.body.position.y=air?0:Math.abs(Math.sin(stride))*.10;
+ r.body.position.y=0;
  for(const l of r.limbs){
   const s=Math.sin(stride)*l.side;
   l.arm.rotation.x=air?-1.6:s*.95;
@@ -371,33 +382,69 @@ function disposeGroup(group){
 }
 const waterMat=new THREE.MeshStandardMaterial({color:'#368e99',roughness:.22,metalness:.32});
 const foamMat=new THREE.MeshBasicMaterial({color:'#c4e9de',transparent:true,opacity:.65});
-const waterLines=[];
+const waterLines=[],sandSections=[];
+const barkMat=mat('#704831'),endWoodMat=mat('#d7aa6e');
+function floorHeight(d){
+ const span=sandSections.find(s=>d>=s.start&&d<=s.end);
+ if(!span)return elevation(d)+.04;
+ const step=(span.end-span.start)/span.segments;
+ const t=(d-span.start)/step,i=Math.min(span.segments-1,Math.floor(t));
+ return lerp(elevation(span.start+i*step),elevation(span.start+(i+1)*step),t-i)+.04;
+}
+const solePoint=new THREE.Vector3();
+function groundRunner(r,d,air){
+ if(air)return;
+ r.root.updateMatrixWorld(true);
+ let lowest=Infinity;
+ for(const limb of r.limbs)for(const x of [-.115,.115])for(const z of [-.23,.23]){
+  solePoint.set(x,-.1,z);limb.boot.localToWorld(solePoint);
+  const floor=floorHeight(game.d-solePoint.z)-elevation(game.d);
+  lowest=Math.min(lowest,solePoint.y-floor);
+ }
+ // Translate the model until the lowest boot-sole point meets the actual sand mesh.
+ r.root.position.y-=lowest;r.root.updateMatrixWorld(true);
+ r.contactError=lowest;
+}
+
 function rebuildCourse(){
- disposeGroup(course);hazards.length=0;waterLines.length=0;
+ disposeGroup(course);hazards.length=0;waterLines.length=0;sandSections.length=0;
  const rivers=objects.filter(o=>o.wide);let edge=-100;
  for(const o of [...rivers,{d:LENGTH+400}]){
   const end=o.d-18;
   if(end>edge){
+   sandSections.push({start:edge,end,segments:Math.max(1,Math.ceil((end-edge)/10))});
    box(62,26,end-edge,sandstone,course,0,-13.03,-(edge+end)/2);
-   box(14,.12,end-edge,trailMat,course,0,-.02,-(edge+end)/2);
+   box(62,.12,end-edge,trailMat,course,0,-.02,-(edge+end)/2);
   }
   if(o.wide){
-   const waterY=o.ravine?-27:-10;
-   box(160,.5,36,o.ravine?darkRock:waterMat,course,0,waterY,-o.d);
+   const waterY=-1.1;
+   box(160,.5,36,waterMat,course,0,waterY,-o.d);
    if(!o.ravine)for(let j=0;j<10;j++){
     const line=box(7+noise(j)*12,.03,.12,foamMat,course,-65+j*14,waterY+.28,-o.d-14+noise(j+20)*28);
     waterLines.push(line);
    }
    // Exposed vertical banks give the leap real depth, not a painted stripe.
-   box(62,2,.8,darkRock,course,0,-1,-o.d+18);
-   box(62,2,.8,darkRock,course,0,-1,-o.d-18);
+   box(62,1,.8,trailMat,course,0,-.5,-o.d+18);
+   box(62,1,.8,trailMat,course,0,-.5,-o.d-18);
   }
   edge=o.d+18;
  }
  for(const o of objects){
   if(o.wide)continue;
-  const g=new THREE.Group();g.position.set(LANES[o.lane]/92*4.2,0,-o.d);course.add(g);
-  if(o.type==='rock'){
+  const g=new THREE.Group();g.position.set(o.type==='log'?0:LANES[o.lane]/92*4.2,0,-o.d);course.add(g);
+  if(o.type==='log'){
+   const trunk=mesh(new THREE.CylinderGeometry(.52,.62,14,14,1),[barkMat,endWoodMat,endWoodMat],g,0,.66,0);
+   trunk.rotation.z=Math.PI/2;
+   for(let j=0;j<8;j++){
+    const a=j*Math.PI/4;
+    const ridge=box(13.7,.065,.065,darkRock,g,0,.66+Math.cos(a)*.55,Math.sin(a)*.55);
+   }
+   const branch=mesh(new THREE.CylinderGeometry(.1,.2,1.2,7),barkMat,g,2,1.25,0);branch.rotation.z=-.6;
+   for(const side of [-1,1])for(const radius of [.17,.33,.46]){
+    const ring=mesh(new THREE.RingGeometry(radius-.018,radius,24),barkMat,g,side*7.01,.66,0);
+    ring.rotation.y=side*Math.PI/2;
+   }
+  }else if(o.type==='rock'){
    const rock=mesh(new THREE.DodecahedronGeometry(1.35,0),darkRock,g,0,.85,0);rock.scale.set(1.1,.85,1);rock.rotation.set(.2,.5,.1);
   }else{
    for(let j=0;j<7;j++){
@@ -435,6 +482,51 @@ let boost=0,visualTime=0,previousY=0,landing=0,rushDistance=0;
 const wayneLabel=document.createElement('div');wayneLabel.textContent='WAYNE';
 wayneLabel.style.cssText='position:absolute;z-index:2;font-size:12px;font-weight:900;color:#f8ffff;text-shadow:0 2px 5px #123;pointer-events:none;transform:translate(-50%,-100%);letter-spacing:.12em';
 $('stage').appendChild(wayneLabel);
+const story=[
+ ['So I told the ranger, “This is my recovery pace.”','…told the ranger… recovery pace…'],
+ ['Anyway, the goat was already wearing my helmet.','…the goat… wearing my helmet…'],
+ ['I said, “You cannot belay. You have hooves.”','…cannot belay… HOOVES…'],
+ ['Vin? You are hearing the important part, right?','…Vin? …important part… right?'],
+ ['Then the helicopter pilot asked ME to slow down.','…helicopter pilot… slow down…'],
+ ['Long story short, I am banned from that petting zoo.','…banned… petting zoo…'],
+ ['This next bit is basically flat. Vertically flat.','…basically flat… VERTICALLY…'],
+ ['Are you still back there? I have not started jogging.','…still back there? …not jogging…'],
+ ['I packed a light lunch. A watermelon and a Dutch oven.','…light lunch… Dutch oven…'],
+ ['The summit is just around the next seven corners.','…just around… seven corners…']
+];
+const speechBubble=document.createElement('div');
+speechBubble.style.cssText='position:absolute;z-index:3;left:50%;top:24%;transform:translateX(-50%);width:min(270px,75vw);padding:10px 13px;border-radius:14px;background:#fff6dfed;color:#46321e;text-align:center;font:italic 700 15px/1.35 system-ui;box-shadow:0 3px 16px #20150b44;pointer-events:none';
+speechBubble.hidden=true;$('stage').appendChild(speechBubble);
+const voiceButton=document.createElement('button');voiceButton.textContent='Voice: off';
+voiceButton.style.cssText='position:absolute;z-index:4;right:15px;bottom:85px;padding:10px;border:1px solid #ffe8bd77;border-radius:9px;background:#34251dc9;color:#fff6df;font:700 14px system-ui';
+$('stage').appendChild(voiceButton);
+let voiceEnabled=false,storyIndex=-1;
+const canSpeak=!!(window.speechSynthesis&&window.SpeechSynthesisUtterance);
+voiceButton.hidden=!canSpeak;
+function stopWayneVoice(){if(canSpeak)window.speechSynthesis.cancel();}
+function speakWayne(text){
+ if(!voiceEnabled||!canSpeak)return;
+ stopWayneVoice();const utterance=new window.SpeechSynthesisUtterance(text);
+ utterance.lang='en-US';utterance.rate=1.08;utterance.pitch=.9;
+ utterance.volume=clamp(1-(game.gap-20)/110,.12,.85);
+ window.speechSynthesis.speak(utterance);
+}
+voiceButton.onclick=()=>{
+ voiceEnabled=!voiceEnabled;voiceButton.textContent=voiceEnabled?'Voice: on':'Voice: off';
+ if(voiceEnabled)speakWayne('Vin! Keep up. I am getting to the good part.');else stopWayneVoice();
+};
+function updateWayneStory(){
+ const elapsed=game.time-2,index=Math.floor(elapsed/4.1),phase=elapsed-index*4.1;
+ speechBubble.hidden=mode!=='play'||elapsed<0||phase>3.45;
+ if(speechBubble.hidden)return;
+ const line=story[index%story.length],far=game.gap>44;
+ speechBubble.textContent='WAYNE: “'+line[far?1:0]+'”';
+ speechBubble.style.opacity=String(clamp(1-(game.gap-35)/130,.48,1));
+ const x=clamp((projected.x+1)*50,30,70),y=clamp((1-projected.y)*50-10,19,44);
+ speechBubble.style.left=x+'%';speechBubble.style.top=y+'%';
+ if(index!==storyIndex){storyIndex=index;speakWayne(line[far?1:0]);}
+}
+
 const projected=new THREE.Vector3();
 function drawSpeed(dt){
  ctx.clearRect(0,0,W,H);
@@ -481,18 +573,20 @@ function draw(){
  vin.root.rotation.z=clamp((game.targetX-game.laneX)/92,-1,1)*-.18+turn*.35;
  vin.root.visible=!(game.inv>0&&Math.floor(game.inv*12)%2===0);
  pose(vin,game.time,game.speed,!game.onGround);
- vin.shadow.position.set(vin.root.position.x,.08,0);vin.shadow.scale.setScalar(1+game.jumpY*.07);
- vin.shadow.material.opacity=.28/(1+game.jumpY*.25);
+ groundRunner(vin,d,!game.onGround);
+ vin.shadow.position.set(vin.root.position.x,floorHeight(d)-elevation(d)+.012,0);vin.shadow.scale.setScalar(1+game.jumpY*.07);
+ vin.shadow.material.opacity=.43/(1+game.jumpY*.25);
  const overGap=objects.some(o=>o.wide&&Math.abs(o.d-d)<18);vin.shadow.visible=!overGap;
  const wz=-game.gap;
  wayne.root.rotation.y=-Math.atan(slope(d+game.gap));
  wayne.root.rotation.x=Math.atan(grade(d+game.gap));
  const wayneElevation=elevation(d+game.gap)-elevation(d);
- wayne.root.position.set(curve(d+game.gap)-curve(d)+Math.sin(game.time*.9)*2,wayneElevation+Math.max(0,Math.sin(game.time*1.7))*.2,wz);
- const wayneGap=objects.find(o=>o.wide&&Math.abs(o.d-(d+game.gap))<48);
- if(wayneGap)wayne.root.position.y=wayneElevation+Math.sin(clamp((48+(d+game.gap-wayneGap.d))/96,0,1)*Math.PI)*10;
- wayne.root.visible=game.wayneVisible;pose(wayne,game.time+2,12,wayne.root.position.y-wayneElevation>1);
- wayne.shadow.position.set(wayne.root.position.x,wayneElevation+.08,wz);wayne.shadow.rotation.x=-Math.PI/2+Math.atan(grade(d+game.gap));wayne.shadow.visible=game.wayneVisible&&!wayneGap;
+ wayne.root.position.set(curve(d+game.gap)-curve(d)+Math.sin(game.time*.9)*2,wayneElevation,wz);
+ const wayneGap=objects.find(o=>(o.wide||o.type==='log')&&Math.abs(o.d-(d+game.gap))<90);
+ if(wayneGap)wayne.root.position.y=wayneElevation+Math.sin(clamp((90+(d+game.gap-wayneGap.d))/180,0,1)*Math.PI)*16;
+ wayne.root.visible=game.wayneVisible;pose(wayne,game.time+2,12,!!wayneGap);
+ groundRunner(wayne,d+game.gap,!!wayneGap);
+ wayne.shadow.position.set(wayne.root.position.x,floorHeight(d+game.gap)-elevation(d)+.012,wz);wayne.shadow.rotation.x=-Math.PI/2+Math.atan(grade(d+game.gap));wayne.shadow.visible=game.wayneVisible&&!wayneGap;
  if(previousY>0&&game.onGround)landing=.23;
  previousY=game.jumpY;landing=Math.max(0,landing-dt);
  camera.fov=lerp(camera.fov,65+boost*29,Math.min(1,dt*6));camera.updateProjectionMatrix();
@@ -503,6 +597,7 @@ function draw(){
  renderer.render(scene,camera);drawSpeed(dt);
  projected.copy(wayne.root.position);projected.y+=3.7;projected.project(camera);
  wayneLabel.hidden=!game.wayneVisible||projected.z>1||Math.abs(projected.x)>1;
+ updateWayneStory();
  wayneLabel.style.left=((projected.x+1)*50)+'%';wayneLabel.style.top=((1-projected.y)*50)+'%';
 }
 function frame(t){
