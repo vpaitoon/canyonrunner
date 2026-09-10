@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#442616">
+<title>Canyon Runner — Vin's Ascension</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#160e0b;color:#fff2d2;font-family:"Trebuchet MS",system-ui,sans-serif}
+button,a{touch-action:manipulation}
+#stage{position:relative;margin:auto;width:min(100vw,60vh);height:100%;overflow:hidden;background:#c77943}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+.top{position:absolute;z-index:2;top:max(15px,env(safe-area-inset-top));left:15px;right:15px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+.label{font-size:11px;letter-spacing:.15em;color:#ffd69a;font-weight:900;text-shadow:0 2px 3px #32190e}
+.value{font-size:22px;font-weight:900;text-shadow:0 2px 4px #32190e}
+.right{text-align:right}
+#pause{pointer-events:auto;margin-top:7px;background:#2d190fbb;color:#fff2d2;border:1px solid #ffffff66;border-radius:8px;padding:7px 12px;font:inherit}
+.progress{position:absolute;z-index:3;top:0;left:0;right:0;height:4px;background:#4c2718}
+.progress i{display:block;width:0;height:100%;background:#ffe16f}
+#message{position:absolute;z-index:2;top:95px;left:20px;right:20px;text-align:center;font-size:17px;font-weight:900;text-shadow:0 2px 5px #32180d;pointer-events:none}
+#gapbar{position:absolute;z-index:2;left:20px;right:20px;bottom:max(20px,env(safe-area-inset-bottom));height:13px;border:2px solid #fff0c5;border-radius:999px;background:#32190eaa;overflow:hidden;pointer-events:none}
+#gapfill{height:100%;width:24%;background:#ffe16f;transition:width .08s linear}
+#gaplabel{position:absolute;z-index:2;bottom:max(39px,calc(env(safe-area-inset-bottom) + 19px));left:20px;right:20px;text-align:center;font-size:11px;letter-spacing:.13em;font-weight:900;text-shadow:0 2px 3px #32190e}
+.veil{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(#24130d99,#17100df2);overflow:auto}
+.veil[hidden]{display:none}
+.card{max-width:350px;text-align:center}
+.eyebrow{font-size:12px;letter-spacing:.2em;color:#ffe16f;font-weight:900}
+h1{font-size:clamp(34px,9vw,48px);line-height:1.0;letter-spacing:-.045em;margin:16px 0}
+h1 em{display:block;color:#ffe16f;font-style:normal}
+.card p{font-size:16px;line-height:1.52;color:#f2dfc9}
+.instructions{border-top:1px solid #ffffff33;border-bottom:1px solid #ffffff33;padding:14px 0}
+.go{background:#ffe16f;color:#382114;font-family:inherit;font-size:18px;font-weight:900;border:0;border-radius:10px;padding:15px 26px;cursor:pointer}
+.menu{display:block;color:#e9d0b3;margin-top:20px;font-size:14px}
+button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:4px}
+@media(max-height:600px){.card p{font-size:14px}h1{font-size:30px;margin:8px 0}.instructions{padding:7px 0}.menu{margin-top:12px}}
+</style>
+</head>
+<body>
+<main id="stage">
+<canvas id="game" aria-label="Vin running up a sandstone approach trying to keep Wayne in sight. Hold to accelerate, release to jump, and swipe left or right to change lanes."></canvas>
+<div class="progress"><i id="progress"></i></div>
+<div class="top">
+  <div><div class="label">VIN · SANDSTONE APPROACH</div><div class="value" id="distance">0 / 2.4 km</div></div>
+  <div class="right"><div class="label">WAYNE GAP</div><div class="value" id="gap">38 m</div><button id="pause" aria-label="Pause game">Ⅱ</button></div>
+</div>
+<div id="message" role="status"></div>
+<div id="gaplabel">KEEP WAYNE IN ORBITAL RANGE</div>
+<div id="gapbar"><div id="gapfill"></div></div>
+
+<div class="veil" id="overlay">
+  <div class="card">
+    <div class="eyebrow">CANYON RUNNER / LEVEL 06</div>
+    <h1 id="title">Vin's<em>Ascension</em></h1>
+    <p id="description">Wayne has started the approach.<br>Unfortunately, Wayne approaches things at approximately highway speed.</p>
+    <p class="instructions" id="instructions">
+      <b>Hold the screen</b> to accelerate.<br>
+      <b>Release</b> to jump creeks and ledges.<br>
+      <b>Swipe left or right</b> to change lanes.<br>
+      Keep Wayne somewhere near the visible universe.<br>
+      <small>Keyboard: hold Space/↑ to run · release to jump · ← / → to change lanes · P to pause</small>
+    </p>
+    <button class="go" id="start">Try to keep up</button>
+    <a class="menu" href="index.html">Back to all levels</a>
+  </div>
+</div>
+</main>
+
+<script>
+(function(){
+'use strict';
+
+const W=420,H=760,LENGTH=2400;
+const LANES=[-92,0,92];
+const $=id=>document.getElementById(id);
+const canvas=$('game'),ctx=canvas.getContext('2d');
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+let mode='title',pausedFrom='play',last=0,acc=0;
+let game,objects=[],dust=[],streaks=[];
+let pointer=null,runHeld=false,keyHeld=false;
+
+function resize(){
+  const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2.5);
+  canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);
+  ctx.setTransform(canvas.width/W,0,0,canvas.height/H,0,0);
+}
+function seedObjects(){
+  objects=[];
+  let d=170,i=0;
+  while(d<LENGTH-80){
+    d += 75 + ((i*47)%92);
+    const lane=(i*7+1)%3;
+    const roll=i%9;
+    let type=roll===1||roll===6?'creek':roll===3?'rock':roll===5?'sage':'none';
+    if(type!=='none')objects.push({d,lane,type,hit:false});
+    i++;
+  }
+}
+function reset(){
+  game={
+    d:0,lane:1,laneX:0,targetX:0,speed:4,wayneSpeed:9.8,gap:38,
+    jumpY:0,jumpV:0,onGround:true,time:0,hits:0,stalls:0,
+    inv:0,toast:3,wayneVisible:true,waynePhase:0,finishBurst:0
+  };
+  seedObjects();dust=[];streaks=[];
+  $('message').textContent='Wayne is already moving. This seems unnecessary.';
+  updateHUD();
+}
+function begin(){
+  reset();mode='play';$('overlay').hidden=true;$('pause').textContent='Ⅱ';
+}
+function pause(){
+  if(mode==='play'){pausedFrom='play';mode='pause';runHeld=false;keyHeld=false;
+    $('title').innerHTML='Catching your<em>breath?</em>';
+    $('description').textContent='Wayne is not catching his.';
+    $('instructions').hidden=true;$('start').textContent='Resume pursuit';$('overlay').hidden=false;
+  }else if(mode==='pause'){mode=pausedFrom;$('overlay').hidden=true;}
+}
+function finish(win){
+  mode=win?'win':'over';runHeld=false;keyHeld=false;
+  $('instructions').hidden=false;
+  if(win){
+    $('title').innerHTML='Summit-ish!<em>Wayne waited.</em>';
+    $('description').textContent='Vin survived the approach with '+game.hits+' crashes. Wayne claims he was walking.';
+    $('instructions').textContent='2.4 km climbed at a deeply unreasonable pace.';
+    $('start').textContent='Ascend again';
+  }else{
+    $('title').innerHTML='Wayne has achieved<em>low Earth orbit.</em>';
+    $('description').textContent='Vin lost the trail after '+Math.floor(game.d)+' m and '+game.hits+' crashes.';
+    $('instructions').textContent='Hold longer. Crash less. Question Wayne’s definition of “approach pace.”';
+    $('start').textContent='Try again';
+  }
+  $('overlay').hidden=false;
+}
+function changeLane(dir){
+  if(mode!=='play')return;
+  game.lane=clamp(game.lane+dir,0,2);
+  game.targetX=LANES[game.lane];
+}
+function jump(){
+  if(mode!=='play'||!game.onGround)return;
+  game.onGround=false;game.jumpV=390;
+  game.jumpY=.01;
+}
+function hurt(o){
+  if(game.inv>0||mode!=='play')return;
+  game.inv=1.1;game.hits++;game.speed*=.38;game.gap+=17;o.hit=true;
+  game.jumpV=210;game.onGround=false;game.jumpY=1;
+  $('message').textContent=o.type==='sage'?'Sagebrush: 1 · Vin: 0':'That rock was extremely stationary.';
+  game.toast=1.5;
+}
+function updateHUD(){
+  $('distance').textContent=(Math.min(LENGTH,game.d)/1000).toFixed(2)+' / 2.4 km';
+  $('gap').textContent=Math.round(game.gap)+' m';
+  $('progress').style.width=(game.d/LENGTH*100)+'%';
+  $('gapfill').style.width=clamp((game.gap-20)/115*100,0,100)+'%';
+}
+function objectY(o){
+  const rel=o.d-game.d;
+  return 555-rel*2.05;
+}
+function objectScale(o){
+  return clamp(.25+(555-objectY(o))/500,0.28,1.3);
+}
+function update(dt){
+  if(mode!=='play')return;
+  game.time+=dt;game.inv=Math.max(0,game.inv-dt);game.toast-=dt;
+  if(game.toast<=0)$('message').textContent='';
+
+  const held=runHeld||keyHeld;
+  const target=held?12.6:3.1;
+  game.speed += (target-game.speed)*(held?2.1:3.5)*dt;
+  if(!held&&game.speed<4.3){game.stalls+=dt;game.gap+=7.5*dt;}
+  else game.stalls=Math.max(0,game.stalls-dt*.5);
+
+  // Wayne is fast, but elastic. He remains barely catchable unless the player repeatedly crashes/coasts.
+  const desiredGap=held?34:51;
+  const crashPenalty=Math.min(50,game.hits*7);
+  game.gap += (desiredGap+crashPenalty-game.gap)*.35*dt;
+  game.gap += Math.max(0,game.wayneSpeed-game.speed)*.55*dt;
+  if(held&&game.speed>10.5)game.gap-=3.2*dt;
+  game.gap=clamp(game.gap,20,155);
+
+  game.d+=game.speed*7.9*dt;
+  game.targetX=LANES[game.lane];
+  game.laneX+=(game.targetX-game.laneX)*Math.min(1,11*dt);
+
+  if(!game.onGround){
+    game.jumpY+=game.jumpV*dt;
+    game.jumpV-=980*dt;
+    if(game.jumpY<=0){game.jumpY=0;game.jumpV=0;game.onGround=true;}
+  }
+
+  for(const o of objects){
+    if(o.hit)continue;
+    const dy=o.d-game.d;
+    if(dy>-5&&dy<8&&o.lane===game.lane){
+      if(o.type==='creek'){
+        if(game.jumpY<34)hurt(o);
+        else o.hit=true;
+      }else if(game.jumpY<28)hurt(o);
+      else o.hit=true;
+    }
+  }
+
+  if(held&&Math.random()<dt*28)streaks.push({x:Math.random()*W,y:120+Math.random()*520,len:35+Math.random()*100,age:0});
+  if(game.speed>8&&Math.random()<dt*20)dust.push({x:210+game.laneX+(Math.random()-.5)*28,y:606,age:0});
+  streaks.forEach(s=>s.age+=dt);streaks=streaks.filter(s=>s.age<.35);
+  dust.forEach(d=>d.age+=dt);dust=dust.filter(d=>d.age<.65);
+
+  game.waynePhase+=dt*(4+game.speed*.3);
+  const shouldHide=game.gap>78 || (game.gap>58 && Math.sin(game.time*.72)>0.86);
+  if(shouldHide!==!game.wayneVisible){
+    game.wayneVisible=!shouldHide;
+    if(!game.wayneVisible){$('message').textContent='WAYNE?!';game.toast=.8;}
+    else{$('message').textContent='There he is. Somehow farther away.';game.toast=1;}
+  }
+
+  if(game.gap>=148||game.stalls>5.5)finish(false);
+  else if(game.d>=LENGTH)finish(true);
+
+  updateHUD();
+}
+function hillY(z){return 535-z*.42}
+function drawBackground(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#6fa8c8');g.addColorStop(.46,'#d6a465');g.addColorStop(1,'#8f4d2e');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  // distant mesas
+  ctx.fillStyle='#8e4e31';ctx.beginPath();ctx.moveTo(0,275);ctx.lineTo(52,230);ctx.lineTo(116,248);ctx.lineTo(162,204);ctx.lineTo(219,243);ctx.lineTo(277,216);ctx.lineTo(335,246);ctx.lineTo(420,207);ctx.lineTo(420,390);ctx.lineTo(0,390);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#b96b3d';ctx.beginPath();ctx.moveTo(0,335);ctx.lineTo(75,287);ctx.lineTo(155,318);ctx.lineTo(221,267);ctx.lineTo(307,311);ctx.lineTo(420,275);ctx.lineTo(420,450);ctx.lineTo(0,450);ctx.closePath();ctx.fill();
+
+  // trail
+  ctx.fillStyle='#d69a5e';ctx.beginPath();ctx.moveTo(165,290);ctx.lineTo(255,290);ctx.lineTo(395,760);ctx.lineTo(24,760);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#b76b40';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(176,290);ctx.lineTo(64,760);ctx.moveTo(244,290);ctx.lineTo(354,760);ctx.stroke();
+
+  // sandstone streaks
+  ctx.globalAlpha=.2;ctx.strokeStyle='#fff0c5';ctx.lineWidth=2;
+  for(let y=350;y<760;y+=38){ctx.beginPath();ctx.moveTo(0,y+Math.sin(y*.08)*8);ctx.lineTo(420,y-8);ctx.stroke()}
+  ctx.globalAlpha=1;
+}
+function drawSpeed(){
+  ctx.lineCap='round';
+  for(const s of streaks){
+    const a=1-s.age/.35;ctx.globalAlpha=a*.65;ctx.strokeStyle='#fff7dc';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x+(s.x<210?-1:1)*s.len,s.y+s.len*.16);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+function drawDust(){
+  for(const p of dust){
+    const a=1-p.age/.65,r=3+p.age*18;ctx.globalAlpha=a*.38;ctx.fillStyle='#f4c58a';ctx.beginPath();ctx.arc(p.x,p.y-p.age*30,r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function drawWayne(){
+  if(!game.wayneVisible)return;
+  const closeness=clamp(1-(game.gap-20)/100,.12,1);
+  const y=260+90*(1-closeness);
+  const scale=.48+.25*closeness;
+  const bob=Math.sin(game.waynePhase)*4;
+  ctx.save();ctx.translate(210+Math.sin(game.time*.9)*20,y+bob);ctx.scale(scale,scale);
+  ctx.strokeStyle='#22150f';ctx.lineWidth=8;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(0,15);ctx.lineTo(-8,47);ctx.moveTo(-3,25);ctx.lineTo(-25,40);ctx.moveTo(-4,47);ctx.lineTo(-20,74);ctx.moveTo(-4,47);ctx.lineTo(18,70);ctx.stroke();
+  ctx.fillStyle='#2a1610';ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ffe16f';ctx.font='900 15px Trebuchet MS';ctx.textAlign='center';ctx.fillText('WAYNE',0,-22);
+  ctx.restore();
+}
+function drawObjects(){
+  const visible=objects.filter(o=>!o.hit&&o.d>game.d-10&&o.d<game.d+220).sort((a,b)=>b.d-a.d);
+  for(const o of visible){
+    const y=objectY(o);if(y<280||y>720)continue;
+    const perspective=clamp((y-270)/360,.25,1.2);
+    const x=210+LANES[o.lane]*perspective;
+    ctx.save();ctx.translate(x,y);ctx.scale(perspective,perspective);
+    if(o.type==='rock'){
+      ctx.fillStyle='#69402d';ctx.beginPath();ctx.moveTo(-20,12);ctx.lineTo(-12,-12);ctx.lineTo(8,-19);ctx.lineTo(24,3);ctx.lineTo(15,17);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#9e6845';ctx.beginPath();ctx.moveTo(-12,-12);ctx.lineTo(8,-19);ctx.lineTo(5,-5);ctx.lineTo(-9,1);ctx.closePath();ctx.fill();
+    }else if(o.type==='sage'){
+      ctx.strokeStyle='#61704b';ctx.lineWidth=5;ctx.lineCap='round';
+      for(let a=-1.1;a<=1.1;a+=.36){ctx.beginPath();ctx.moveTo(0,12);ctx.lineTo(Math.sin(a)*28,-10-Math.cos(a)*22);ctx.stroke()}
+    }else{
+      ctx.fillStyle='#4f83a0';ctx.beginPath();ctx.moveTo(-60,0);ctx.quadraticCurveTo(0,20,60,0);ctx.lineTo(54,24);ctx.quadraticCurveTo(0,42,-54,24);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#8f5b3d';ctx.fillRect(-63,-5,126,8);
+    }
+    ctx.restore();
+  }
+}
+function drawVin(){
+  const x=210+game.laneX,y=604-game.jumpY*.62;
+  const stride=Math.sin(game.time*(8+game.speed))*14*(game.onGround?1:0);
+  ctx.save();ctx.translate(x,y);
+  if(game.inv>0&&Math.floor(game.inv*12)%2===0)ctx.globalAlpha=.35;
+  ctx.strokeStyle='#2a1710';ctx.lineWidth=9;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(0,-51);ctx.lineTo(-2,-18);
+  ctx.moveTo(-1,-38);ctx.lineTo(-24,-17-stride*.3);
+  ctx.moveTo(-1,-37);ctx.lineTo(23,-17+stride*.3);
+  ctx.moveTo(-2,-18);ctx.lineTo(-17+stride,-1);
+  ctx.moveTo(-2,-18);ctx.lineTo(17-stride,-1);ctx.stroke();
+  ctx.fillStyle='#342019';ctx.beginPath();ctx.arc(0,-66,14,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ffe16f';ctx.fillRect(-11,-51,20,27);
+  ctx.fillStyle='#fff4d3';ctx.font='900 13px Trebuchet MS';ctx.textAlign='center';ctx.fillText('VIN',0,-91);
+  ctx.restore();
+}
+function draw(){
+  drawBackground();drawWayne();drawObjects();drawSpeed();drawDust();drawVin();
+  if(mode==='play'&&(runHeld||keyHeld)&&game.speed>9){
+    ctx.globalAlpha=clamp((game.speed-9)/5,0,.22);ctx.fillStyle='#fff6d4';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  }
+}
+function frame(t){
+  const dt=last?Math.min((t-last)/1000,.05):0;last=t;acc+=dt;
+  while(acc>=1/120){update(1/120);acc-=1/120}
+  draw();requestAnimationFrame(frame);
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(mode!=='play')return;
+  e.preventDefault();canvas.setPointerCapture(e.pointerId);
+  pointer={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+  runHeld=true;
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!pointer||pointer.id!==e.pointerId||mode!=='play')return;
+  const dx=e.clientX-pointer.x;
+  if(Math.abs(dx)>45&&!pointer.moved){
+    changeLane(dx>0?1:-1);pointer.moved=true;
+  }
+});
+function releasePointer(e){
+  if(!pointer||pointer.id!==e.pointerId)return;
+  runHeld=false;
+  if(!pointer.moved)jump();
+  pointer=null;
+}
+['pointerup','pointercancel','lostpointercapture'].forEach(type=>canvas.addEventListener(type,releasePointer));
+
+window.addEventListener('keydown',e=>{
+  if(mode!=='play'&&e.key!=='p'&&e.key!=='P'&&e.key!=='Escape')return;
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'){e.preventDefault();if(!e.repeat)changeLane(-1)}
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D'){e.preventDefault();if(!e.repeat)changeLane(1)}
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w'||e.key==='W'){e.preventDefault();keyHeld=true}
+  if((e.key==='p'||e.key==='P'||e.key==='Escape')&&!e.repeat)pause();
+});
+window.addEventListener('keyup',e=>{
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w'||e.key==='W'){if(keyHeld){keyHeld=false;jump()}}
+});
+window.addEventListener('blur',()=>{if(mode==='play')pause()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='play')pause()});
+window.addEventListener('resize',resize);
+$('pause').onclick=pause;
+$('start').onclick=()=>mode==='pause'?pause():begin();
+
+reset();resize();requestAnimationFrame(frame);
+window.__ASCENSION={start:begin,step:update,state:()=>game,objects:()=>objects,changeLane,jump,pause,mode:()=>mode};
+})();
+</script>
+</body>
+</html>
